@@ -13,14 +13,14 @@ class FinancialIndexer:
         self.embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
     def create_index(self):
-        # 1. Cari semua file .json di folder decomposed
+        # searching all json file in decomposed folder
         files = glob.glob(os.path.join(self.input_dir, "*.json"))
         
         if not files:
-            print(f"❌ Tidak ada file .json ditemukan di {self.input_dir}")
+            print(f"didn't found json file in {self.input_dir}")
             return
 
-        print(f"📖 Membaca {len(files)} file decomposed...")
+        print(f"reading {len(files)} file decomposed...")
         
         all_docs = []
         for file_path in files:
@@ -28,38 +28,36 @@ class FinancialIndexer:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     
-                # Ambil hanya bagian yang bertipe 'text'
-                # Gabungkan semua narasi dari satu file menjadi satu dokumen besar
                 narrative_text = ""
                 for item in data:
                     if item.get('type') == 'text':
                         narrative_text += item.get('content', '') + "\n\n"
                 
                 if narrative_text.strip():
-                    # Masukkan ke list dokumen LangChain dengan metadata
+                    # adding list into langchain docs and metadata
                     doc = Document(
                         page_content=narrative_text,
                         metadata={"source": os.path.basename(file_path)}
                     )
                     all_docs.append(doc)
             except Exception as e:
-                print(f"⚠️ Gagal membaca {file_path}: {e}")
+                print(f"failed to read {file_path}: {e}")
 
         if not all_docs:
-            print("❌ Tidak ada teks narasi yang berhasil diekstrak.")
+            print("there's no succees  naration extration")
             return
 
-        print(f"🧩 Membagi {len(all_docs)} dokumen menjadi potongan kecil (chunking)...")
+        print(f"chunking {len(all_docs)} docs")
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
         chunks = text_splitter.split_documents(all_docs)
 
-        print(f"💾 Menyimpan {len(chunks)} potongan ke Vector Database...")
+        print(f"save {len(chunks)} to vector database")
         vector_db = Chroma.from_documents(
             documents=chunks,
             embedding=self.embeddings,
             persist_directory=self.db_dir
         )
-        print(f"✅ Selesai! Database tersimpan di: {self.db_dir}")
+        print(f"finished")
 
 if __name__ == "__main__":
     indexer = FinancialIndexer()
