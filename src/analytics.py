@@ -8,7 +8,7 @@ from keras.models import Sequential
 from keras.layers import LSTM, Dense, Dropout, Input
 from datetime import datetime, timedelta
 
-# Pembersihan log dan warning
+# log and warning cleaning
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 warnings.filterwarnings('ignore')
 
@@ -17,11 +17,11 @@ class StockAnalyst:
         self.scaler = MinMaxScaler(feature_range=(0, 1))
 
     def _get_market_config(self, ticker):
-        # Deteksi otomatis Market Index berdasarkan ticker
+        # market index detection based on ticker (indonesia and global stocks)
         if ticker.upper().endswith(".JK"):
             return "^JKSE", "IDR"
         else:
-            return "^GSPC", "USD" # Default ke S&P 500 untuk US/Global
+            return "^GSPC", "USD"
 
     def _calculate_indicators(self, df):
         # Technical Indicator Engine
@@ -43,7 +43,7 @@ class StockAnalyst:
 
     def forecast_price(self, ticker, end_date=None):
         try:
-            # 1. DATA ACQUISITION
+            # Data acquisition
             market_idx, currency = self._get_market_config(ticker)
             current_end = end_date if end_date else datetime.now().strftime('%Y-%m-%d')
             
@@ -52,12 +52,12 @@ class StockAnalyst:
             
             if stock_data.empty: return {"error": f"Ticker {ticker} tidak ditemukan."}
 
-            # 2. DATA ALIGNMENT (Mencegah NaN akibat perbedaan hari libur bursa)
+            # Data alignment
             df = self._calculate_indicators(stock_data)
             df = df.join(pd.DataFrame({'MARKET_INDEX': macro_data}), how='left')
             df['MARKET_INDEX'] = df['MARKET_INDEX'].ffill().bfill() # Sinkronisasi kalender bursa
 
-            # 3. AI FORECAST ENGINE (LSTM)
+            # forecast engine using LSTM
             features = ['Close', 'RSI', 'MACD', 'ATR', 'MARKET_INDEX']
             scaled_data = self.scaler.fit_transform(df[features])
 
@@ -84,7 +84,7 @@ class StockAnalyst:
             dummy[0, 0] = raw_pred
             expected_mean = self.scaler.inverse_transform(dummy)[0,0]
 
-            # 4. STRATEGIC CALCULATION
+            # Strategic calculation
             current_price = df['Close'].iloc[-1]
             atr = df['ATR'].iloc[-1]
             market_trend = df['MARKET_INDEX'].pct_change(5).iloc[-1]
@@ -93,7 +93,6 @@ class StockAnalyst:
             bear_obj = expected_mean - (1.5 * atr)
             
             # Scenario Edge Ratio Calculation
-            # LaTeX: $$Scenario Edge Ratio = \frac{Bull - Price}{Price - Bear}$$
             upside = bull_obj - current_price
             downside = current_price - bear_obj
             edge_ratio = round(upside / (downside + 1e-9), 2)
@@ -106,7 +105,7 @@ class StockAnalyst:
             else:
                 probs = {"bull": 0.33, "neutral": 0.34, "bear": 0.33}
 
-            # 5. DECISION & INVALIDATION
+            # Decison and validation
             floor = df['Low'].tail(30).min()
             ceiling = df['High'].tail(20).max()
 
@@ -140,11 +139,3 @@ class StockAnalyst:
             }
         except Exception as e:
             return {"error": str(e)}
-
-if __name__ == "__main__":
-    analyst = StockAnalyst()
-    # Test US Market (Palantir)
-    print("Testing PLTR (US):")
-    print(analyst.forecast_price("PLTR"))
-    print("\nTesting BBCA (Indo):")
-    print(analyst.forecast_price("BBCA.JK"))
