@@ -32,7 +32,7 @@ Access to these datasets is restricted to authorized collaborators to maintain d
 * **To Request Access:** Please send an email to **aryaputraa1911@gmail.com** with the subject line `[Data Access Request] Finbench-LLM`.
 ---
 
-## 📝 Dataset Citation
+## Dataset Citation
 This project utilizes the **FinanceBench** dataset for benchmarking financial Question Answering and Epistemic Audit capabilities:
 
 ```bibtex
