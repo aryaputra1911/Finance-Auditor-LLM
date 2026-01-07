@@ -27,9 +27,9 @@ class StockAnalyst:
         
         # Feature Attribution
         attributions = {
-            "market_momentum": 0.65, # form MARKET_INDEX
-            "volatility_regime": 0.20, # form ATR
-            "price_history": 0.15   # form Close
+            "market_momentum": 0.65, # from MARKET_INDEX
+            "volatility_regime": 0.20, # from ATR
+            "price_history": 0.15   # from Close
         }
         
         return {
@@ -158,3 +158,4 @@ class StockAnalyst:
             }
         except Exception as e:
             return {"error": str(e)}
+
