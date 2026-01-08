@@ -1,133 +1,145 @@
 import json
-import os
 import yfinance as yf
-from datetime import datetime
+from datetime import datetime, timedelta
+from tavily import TavilyClient
 from evaluator import FinancialEvaluator
 from analytics import StockAnalyst 
 
-# Agent Enrichment description
-class DataEnrichmentAgent:
-    def fetch_live_fundamentals(self, ticker_symbol):
-        print(f"[*] Executing Deep-Search for {ticker_symbol}...")
-        try:
-            ticker = yf.Ticker(ticker_symbol)
-            info = ticker.info
-            bs = ticker.balance_sheet
-            is_stmt = ticker.income_stmt
-            
-            ts = datetime.now().isoformat()
-            
-            # Helper to retrieve the latest data from a dataframe or info
-            def get_latest(df, key_list, default_info_key):
-                if df is not None and not df.empty:
-                    for k in key_list:
-                        if k in df.index:
-                            return float(df.loc[k].iloc[0])
-                return info.get(default_info_key)
+class FinbenchSystem:
+    def __init__(self, canonical_path, tavily_api_key):
+        self.lstm_engine = StockAnalyst() 
+        self.evaluator = FinancialEvaluator(canonical_path)
+        self.tavily_api_key = tavily_api_key
+        self.researcher = TavilyClient(api_key=tavily_api_key) if tavily_api_key else None             
+        self.evidence_weights = {
+            "FUNDAMENTAL_DATA": 1.0,
+            "PEER_CONTEXT": 0.5,
+            "MARKET_NOISE": 0.0
+        }
 
-            # extraction with Fallback Keys
-            revenue = get_latest(is_stmt, ['Total Revenue', 'TotalRevenue'], 'totalRevenue')
-            net_inc = get_latest(is_stmt, ['Net Income', 'NetIncome'], 'netIncome')
-            assets = get_latest(bs, ['Total Assets', 'TotalAssets'], 'totalAssets')
-            liabs = get_latest(bs, ['Total Liabilities Net Minority Interest', 'TotalDebt'], 'totalDebt')
+    # input classifier
+    def _epistemic_noise_filter(self, query):
+        speculative_noise = ['buy', 'sell', 'long', 'short', 'reco', 'advice', 'target']
+        sentiment_noise = ['bullish', 'bearish', 'hype', 'undervalued', 'overvalued', 'moon']
+        temporal_noise = ['surge', 'plunge', 'daily', 'news', 'rally', 'correction']
+        
+        all_noise = speculative_noise + sentiment_noise + temporal_noise
+        detected = [word for word in all_noise if word in query.lower()]
+        
+        return {
+            "is_noisy": len(detected) > 0,
+            "noise_elements": detected,
+            "action": "BLOCK_RECO" if any(w in speculative_noise for w in detected) else "IGNORE"
+        }
+
+    def _get_deep_fundamentals(self, ticker):
+        try:
+            t = yf.Ticker(ticker)
+            bs = t.balance_sheet
+            is_stmt = t.income_stmt
+            
+            def extract(df, keys):
+                if df is not None and not df.empty:
+                    for k in keys:
+                        if k in df.index: 
+                            val = df.loc[k].iloc[0]
+                            return float(val) if val is not None else None
+                return None
 
             return {
-                "observed": {
-                    "revenue": {"value": revenue, "source": "YahooFinance_DeepSearch", "ts": ts},
-                    "net_income": {"value": net_inc, "source": "YahooFinance_DeepSearch", "ts": ts},
-                    "assets": {"value": assets, "source": "YahooFinance_DeepSearch", "ts": ts},
-                    "liabilities": {"value": liabs, "source": "YahooFinance_DeepSearch", "ts": ts}
-                }
+                "revenue": extract(is_stmt, ['Total Revenue', 'TotalRevenue']),
+                "net_income": extract(is_stmt, ['Net Income', 'NetIncome']),
+                "assets": extract(bs, ['Total Assets', 'TotalAssets']),
+                "liabilities": extract(bs, ['Total Liabilities Net Minority Interest', 'TotalDebt', 'Total Liabilities'])
             }
         except Exception as e:
-            print(f"[!] Deep-Search failed: {e}")
-            return None
+            print(f"[!] Acquisition Error {ticker}: {e}")
+            return {}
 
-# System Orchestrator definiton
-class FinbenchSystem:
-    def __init__(self, canonical_path):
-        self.lstm_engine = StockAnalyst()
-        self.evaluator = FinancialEvaluator(canonical_path)
-        self.enricher = DataEnrichmentAgent()
-
-    def _determine_capability_gate(self, state):
-        gates = {
-            "EPISTEMIC_HEALTHY": ["PRICE_OBSERVATION", "VOLATILITY_TRACKING", "VALUATION", "FORECASTING", "STRATEGIC_ADVICE"],
-            "EPISTEMIC_CONTAMINATED": ["PRICE_OBSERVATION", "VOLATILITY_TRACKING"],
-            "EPISTEMIC_INSUFFICIENT": ["PRICE_OBSERVATION"]
-        }
-        return gates.get(state, ["PRICE_OBSERVATION"])
-
-    def run(self, ticker, company_id):
-        print(f"\n{'='*60}\nFINBENCH-LLM HUMBLE AGENT v9.4\n{'='*60}")
-
-        # first audit (local database)
-        audit = self.evaluator.analyze_company(company_id)
-        obs = audit["knowledge_base"]["observed"]
-
-        # Checking empty & Enrichment values
-        is_empty = all(v.get("value") == 0 or v.get("value") is None for v in obs.values())
-        if is_empty:
-            print(f"[!] Local storage void for {ticker}. Executing Deep-Search...")
-            live = self.enricher.fetch_live_fundamentals(ticker)
-            if live:
-                obs.update(live["observed"])
-
-        # recalculate data after data is updated
-        assets = obs.get("assets", {}).get("value") or 0
-        liabilities = obs.get("liabilities", {}).get("value") or 0
-        revenue = obs.get("revenue", {}).get("value") or 0
-        net_income = obs.get("net_income", {}).get("value") or 0
+    def _identify_business_archetype(self, ticker, fundamentals):
+        rev = fundamentals.get("revenue")
+        ni = fundamentals.get("net_income")
+        margin = (ni / rev) if rev and ni else 0
         
-        # Hitung Equity Deduced
-        equity_calc = round(assets - liabilities, 2)
-        
-        # Prove Accounting Identity
-        identity_verified = (assets > 0 and assets > liabilities and assets != liabilities)
+        if margin > 0.15:
+            return "IP_DRIVEN_PREMIUM_INDUSTRIAL"
+        elif margin < 0.05:
+            return "COMMODITY_VOLUME_PLAYER"
+        return "STANDARD_MANUFACTURING"
 
-        # Update audit objects manually
-        audit["knowledge_base"]["accounting_proof"] = {
-            "equity_deduced": equity_calc,
-            "identity_verified": identity_verified
+    def _calculate_sovereign_metrics(self, fundamentals, archetype):
+        rev = fundamentals.get("revenue")
+        assets = fundamentals.get("assets")
+        ni = fundamentals.get("net_income")
+        
+        metrics = {}
+        if rev and assets and rev > 0:
+            metrics["asset_turnover"] = round(rev / assets, 2)
+            metrics["capital_intensity_ratio"] = round(assets / rev, 2)
+            
+            if archetype == "IP_DRIVEN_PREMIUM_INDUSTRIAL" and metrics["asset_turnover"] < 0.7:
+                metrics["efficiency_status"] = "ARCHETYPE_CONSISTENT (High Margin Offset)"
+            else:
+                metrics["efficiency_status"] = "STANDARD"
+                
+        if ni and assets and assets > 0:
+            metrics["return_on_assets"] = round((ni / assets) * 100, 2)
+            
+        return metrics
+
+    def _get_sector_benchmarks(self, ticker):
+        return {
+            "source": "INTERNAL_ESTIMATE_2024",
+            "industrial_median_cap_intensity": 1.5,
+            "manufacturing_median_turnover": 0.8,
+            "status": "QUALIFIED_BENCHMARK"
         }
 
-        # Epistemic Scrubbing
-        for key in ["revenue", "net_income", "assets", "liabilities"]:
-            entry = obs.get(key, {"value": None})
-            if entry.get("value") == 0 or entry.get("value") is None:
-                obs[key] = {"value": None, "reason": "omitted_due_to_unreliability", "confidence": 0.0}
-
-        # State Assessment
-        completeness = sum(1 for v in obs.values() if v.get("value") is not None) / 4
+    def run(self, ticker, query=""):
+        # running noise filter
+        noise_audit = self._epistemic_noise_filter(query)
         
-        if identity_verified and completeness >= 0.75:
-            state = "EPISTEMIC_HEALTHY"
-        elif not identity_verified and completeness > 0:
-            state = "EPISTEMIC_CONTAMINATED"
-        else:
-            state = "EPISTEMIC_INSUFFICIENT"
-        
-        allowed_capabilities = self._determine_capability_gate(state)
+        # Data Acquisition
+        raw_fund = self._get_deep_fundamentals(ticker)
+        if not raw_fund or None in raw_fund.values():
+            return {"error": f"Data Insufficient for {ticker}. Epistemic Block active."}
 
-        # Output Construction
-        forecast_output = None
-        if "FORECASTING" in allowed_capabilities:
-            # Memanggil mesin LSTM Anda
-            forecast_output = self.lstm_engine.forecast_price(ticker)
+        # Analyze structure
+        archetype = self._identify_business_archetype(ticker, raw_fund)
+        metrics = self._calculate_sovereign_metrics(raw_fund, archetype)
+        benchmarks = self._get_sector_benchmarks(ticker)
+
+        # Governance & Decision Perimeter
+        governance = {
+            "epistemic_grade": "EVIDENCE_STRONG" if not noise_audit["is_noisy"] else "EVIDENCE_CONTAMINATED_BY_NOISE",
+            "noise_filter_report": noise_audit,
+            "business_archetype": archetype,
+            "decision_perimeter": {
+                "allowed": ["ANALYZE_STRUCTURE", "AUDIT_INTEGRITY"],
+                "forbidden": ["BUY", "SELL", "RECO_DIRECTIONAL"],
+                "instruction_contract": "STRICT_NEUTRALITY_MANDATED"
+            },
+            "evidence_hierarchy_applied": self.evidence_weights
+        }
+
+        # Search Context only if funadmental is clean
+        narratives = []
+        if self.researcher:
+            try:
+                search = self.researcher.search(query=f"{ticker} structural moat audit", max_results=2)
+                narratives = [{"content": r['content'], "reliability": self.evidence_weights["PEER_CONTEXT"]} for r in search['results']]
+            except: pass
 
         return {
-            "execution_status": "PROCESS_COMPLETE",
-            "epistemic_grade": {"status": state, "allowed_capabilities": allowed_capabilities},
-            "knowledge_layer": {
-                "observed": obs,
-                "accounting_logic": audit["knowledge_base"]["accounting_proof"]
+            "temporal": {"analysis_date": datetime.now().strftime("%Y-%m-%d")},
+            "evidence_integrity": {
+                "ticker": ticker, 
+                "source_reliability": self.evidence_weights["FUNDAMENTAL_DATA"],
+                "noise_contamination": noise_audit["is_noisy"]
             },
-            "predictive_layer": {
-                "status": "ACTIVE" if forecast_output else "INACTIVE",
-                "forecast": forecast_output # 
-            },
-            "metacognition": {
-                "known_unknowns": [],
-                "self_questioning": []
-            }
+            "archetype_context": archetype,
+            "sovereign_metrics": metrics,
+            "benchmarks": benchmarks,
+            "governance": governance,
+            "context_noise": narratives
         }
