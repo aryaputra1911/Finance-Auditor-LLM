@@ -1,6 +1,6 @@
-# Finbench-LLM Data Directory Documentation
+# Finance-Auditor-LLM Data Directory Documentation
 
-This directory serves as the centralized storage for all datasets utilized within the Finbench-LLM project. It is structured to handle high-volume financial data, vector indices, and model outputs efficiently.
+This directory serves as the centralized storage for all datasets utilized within the Finance-Auditor-LLM project. It is structured to handle high-volume financial data, vector indices, and model outputs efficiently.
 
 > **Note on Storage Strategy:** Large-scale binary files, including original PDF documents, vector database indices, and raw JSONL datasets, are excluded from this repository via `.gitignore` to maintain optimal repository size and ensure high performance.
 
