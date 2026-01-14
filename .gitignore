@@ -1,0 +1,93 @@
+# ==============================================================================
+# PYTHON & ENVIRONMENT
+# ==============================================================================
+# Byte-compiled / optimized
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual Environments 
+.venv/
+venv/
+ENV/
+env/
+bin/
+lib/
+include/
+share/
+build/
+dist/
+
+# ==============================================================================
+# DATA & DATASETS 
+# ==============================================================================
+# File PDF mentah atau dokumen besar
+data/raw/*.pdf
+*.pdf
+
+# File dataset besar
+*.csv
+*.xlsx
+*.jsonl
+data/processed/
+data/raw/
+
+# Database Vektor (ChromaDB / FAISS)
+data/database/
+**/chroma_db/
+*.sqlite3
+*.bin
+*.pickle
+
+
+# ==============================================================================
+# AI MODELS & WEIGHTS 
+# ==============================================================================
+*.h5
+*.keras
+*.pth
+*.pt
+*.tflite
+*.onnx
+model_weights/
+checkpoints/
+
+# ==============================================================================
+# SECURITY & CONFIGURATION
+# ==============================================================================
+.env
+.flaskenv
+secrets.toml
+
+# ==============================================================================
+# IDE & EDITOR SETTINGS
+# ==============================================================================
+# VS Code
+.vscode/
+*.code-workspace
+.history/
+
+# PyCharm / IntelliJ
+.idea/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# ==============================================================================
+# OPERATING SYSTEM WASTE
+# ==============================================================================
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+desktop.ini
+
+# ==============================================================================
+# LOGS & TEMPORARY FILES
+# ==============================================================================
+*.log
+logs/
+tmp/
+temp/
