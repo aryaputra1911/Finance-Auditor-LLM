@@ -52,7 +52,6 @@ class SovereignLlamaBridge:
         except Exception as e:
             error_msg = str(e).lower()
             if "rate_limit" in error_msg or "429" in error_msg:
-                # Tambahkan kata kunci "PRECISION LOCK" agar sinkron dengan smart_query
                 return "⚠️ **PRECISION LOCK**: High-capacity inference (70B model) is unavailable because the token limit has been reached."
             return f"[BRIDGE_ERROR] AI Failure: {str(e)}"
         
@@ -152,4 +151,5 @@ class SovereignLlamaBridge:
 
         except Exception as e:
             return {"answer": f"⚠️ **INTERNAL_SYSTEM_ERROR**: {str(e)}", "sources": [], "roa": "N/A"}
+
     
