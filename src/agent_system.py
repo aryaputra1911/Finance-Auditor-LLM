@@ -3,11 +3,9 @@ import yfinance as yf
 from datetime import datetime, timedelta
 from tavily import TavilyClient
 from evaluator import FinancialEvaluator
-from analytics import StockAnalyst 
 
 class FinbenchSystem:
     def __init__(self, canonical_path, tavily_api_key):
-        self.lstm_engine = StockAnalyst() 
         self.evaluator = FinancialEvaluator(canonical_path)
         self.tavily_api_key = tavily_api_key
         self.researcher = TavilyClient(api_key=tavily_api_key) if tavily_api_key else None             
@@ -40,25 +38,31 @@ class FinbenchSystem:
             
             def extract(df, keys):
                 if df is not None and not df.empty:
-                    for k in keys:
-                        if k in df.index: 
-                            val = df.loc[k].iloc[0]
-                            # CEK: Jika val adalah None atau NaN, kembalikan 0.0
-                            if val is None or str(val) == 'nan':
-                                return 0.0
-                            return float(val)
-                return 0.0 # Selalu kembalikan float 0.0 jika tidak ditemukan
+                    df.index = df.index.str.replace(' ', '').str.lower()
+                    search_keys = [k.replace(' ', '').lower() for k in keys]
+                    for k in search_keys:
+                        if k in df.index:
+                            val = df.loc[k]
+                            target = val.iloc[0] if hasattr(val, 'iloc') else val
+                            if isinstance(target, (list, tuple)): target = target[0]
+                            return float(target) if target is not None else 0.0
+                return 0.0
 
-            return {
+            data = {
                 "revenue": extract(is_stmt, ['Total Revenue', 'TotalRevenue']),
                 "net_income": extract(is_stmt, ['Net Income', 'NetIncome']),
                 "total_assets": extract(bs, ['Total Assets', 'TotalAssets']),
-                "ppe_net": extract(bs, ['Net PPE', 'Property Plant Equipment Net']),
-                "inventory": extract(bs, ['Inventory']),
+                "ppe_net": extract(bs, ['Net PPE', 'Property Plant Equipment Net', 'Fixed Assets']),
+                "inventory": extract(bs, ['Inventory', 'Stock']),
                 "total_liabilities": extract(bs, ['Total Liabilities Net Minority Interest', 'TotalLiabilities'])
             }
+            
+            # Debugging: Print untuk memastikan data tidak nol di terminal
+            print(f"[*] Data Extracted for {ticker}: Rev: {data['revenue']}, Assets: {data['total_assets']}")
+            return data
+            
         except Exception as e:
-            print(f"[!] Acquisition Error: {e}")
+            print(f"[!] Acquisition Error for {ticker}: {e}")
             return {}
 
     def _identify_business_archetype(self, ticker, fundamentals):
@@ -74,36 +78,30 @@ class FinbenchSystem:
 
     def _calculate_sovereign_metrics(self, fundamentals, archetype):
         rev = fundamentals.get("revenue", 0)
-        assets = fundamentals.get("assets", 0)
+        assets = fundamentals.get("total_assets", 0)
         ni = fundamentals.get("net_income", 0)
         
         metrics = {}
+
         if rev > 0 and assets > 0:
             metrics["asset_turnover"] = round(rev / assets, 2)
             metrics["capital_intensity_ratio"] = round(assets / rev, 2)
             metrics["net_profit_margin"] = round((ni / rev) * 100, 2)
-            
-            # DuPont Identity Check
             metrics["return_on_assets"] = round((ni / assets) * 100, 2)
-            # Menghitung kontribusi margin vs turnover terhadap ROA
-            metrics["margin_contribution_to_roa"] = round(metrics["net_profit_margin"] * metrics["asset_turnover"], 2)
         
         return metrics
 
     def _audit_denominator_integrity(self, fundamentals):
         rev = fundamentals.get("revenue", 0)
-        ppe = fundamentals.get("ppe", 0)
-        assets = fundamentals.get("assets", 0)
-        rnd = fundamentals.get("rnd", 0)
+        ppe = fundamentals.get("ppe_net", 0)
+        assets = fundamentals.get("total_assets", 0)
         
-        # R&D to Revenue
-        rnd_intensity = rnd / rev if rev > 0 else 0
+        ppe_ratio = ppe / assets if assets > 0 else 0
         
         return {
-            "ppe_to_revenue": round(ppe / rev if rev > 0 else 0, 3),
-            "rnd_to_revenue": round(rnd_intensity, 3),
-            "asset_structure": "EXTERNALIZED" if (ppe / rev if rev > 0 else 0) < 0.15 else "INTEGRATED",
-            "intangible_suppression_risk": rnd_intensity > 0.15 and (ppe / assets if assets > 0 else 0) < 0.2
+            "ppe_to_assets": round(ppe_ratio, 3),
+            "asset_structure": "EXTERNALIZED" if ppe_ratio < 0.15 else "INTEGRATED",
+            "is_asset_light": ppe_ratio < 0.15
         }
 
     def _get_sector_benchmarks(self, ticker):
@@ -147,7 +145,7 @@ class FinbenchSystem:
         
         # Data Acquisition
         raw_fund = self._get_deep_fundamentals(ticker)
-        if not raw_fund or None in raw_fund.values():
+        if not raw_fund or raw_fund.get("total_assets", 0) == 0:
             return {"error": f"Data Insufficient for {ticker}. Epistemic Block active."}
 
         # Analyze structure
@@ -176,6 +174,12 @@ class FinbenchSystem:
                 search = self.researcher.search(query=f"{ticker} structural moat audit", max_results=2)
                 narratives = [{"content": r['content'], "url": r.get('url'), "reliability": self.evidence_weights["PEER_CONTEXT"]} for r in search['results']]
             except: pass
+        
+        mechanical_audit = {
+            "roa": metrics.get("return_on_assets", 0),
+            "capital_intensity": metrics.get("capital_intensity_ratio", 0)
+        }
+        stress_test_results = self._calculate_normalization_stress_test(mechanical_audit, benchmarks)
 
         return {
             "temporal": {"analysis_date": datetime.now().strftime("%Y-%m-%d")},
@@ -186,8 +190,11 @@ class FinbenchSystem:
             },
             "archetype_context": archetype,
             "sovereign_metrics": metrics,
+            "stress_test": stress_test_results,
+            "raw_data_summary": raw_fund,
             "denominator_audit": denom_audit,
             "benchmarks": benchmarks,
             "governance": governance,
             "context_noise": narratives
+            
         }
