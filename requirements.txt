@@ -1,0 +1,12 @@
+streamlit==1.52.2
+groq==1.0.0
+tavily-python==0.7.17
+yfinance
+pandas==2.3.3
+numpy==1.26.4
+langchain-core
+langchain-community
+scikit-learn==1.4.1.post1
+tensorflow-cpu
+keras
+protobuf==4.25.8
