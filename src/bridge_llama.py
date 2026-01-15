@@ -11,7 +11,7 @@ DEFAULT_CONFIG = {
     "GROQ_API_KEY": st.secrets["GROQ_API_KEY"],
     "TAVILY_API_KEY": st.secrets["TAVILY_API_KEY"],
     "MODEL_NAME": "llama-3.3-70b-versatile",
-    "CANONICAL_PATH": r"C:\Users\ARYA\My Learning\Finbench-LLM\data\processed\canonical"
+    "CANONICAL_PATH": r"data/results/evaluations"
 }
 
 class SovereignLlamaBridge:
@@ -35,7 +35,7 @@ class SovereignLlamaBridge:
                 temperature=0.0
             )
             ticker = completion.choices[0].message.content.strip().upper()
-            ticker = re.sub(r'[^A-Z]', '', ticker) # Bersihkan karakter non-huruf
+            ticker = re.sub(r'[^A-Z]', '', ticker) 
             return None if "NONE" in ticker or not ticker else ticker
         except:
             return None
@@ -56,6 +56,12 @@ class SovereignLlamaBridge:
             return f"[BRIDGE_ERROR] AI Failure: {str(e)}"
         
     def _prepare_audit_context(self, context_data: dict) -> str:
+        kb = context_data.get("knowledge_base", {})
+        obs = kb.get("observed", {})
+        inf = kb.get("inferred", {})
+        
+        # Ambil nilai value mentah
+        assets = obs.get("assets", {}).get("value", 0)
         audit = context_data.get("sovereign_metrics", {}) 
         raw = context_data.get("raw_data_summary", {})
         stress = context_data.get("stress_test", {})
@@ -136,7 +142,7 @@ class SovereignLlamaBridge:
             
             ai_answer = self._execute_inference(messages)
             
-            # Response formatting logic...
+            # Response formatting logic
             audit_res = context_data.get("sovereign_metrics", {})
             denom_res = context_data.get("denominator_audit", {})
             
@@ -151,5 +157,4 @@ class SovereignLlamaBridge:
 
         except Exception as e:
             return {"answer": f"⚠️ **INTERNAL_SYSTEM_ERROR**: {str(e)}", "sources": [], "roa": "N/A"}
-
     
