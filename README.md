@@ -6,14 +6,23 @@ Financial Auditor LLM is an advanced financial audit instrument built on a **Hyb
 The system is designed to perform *clinical-grade audits* of global public companies by synthesizing structured internal financial data with real-time external market intelligence.
 
 ---
-
 ## Application Interface
 
-![Streamlit App Screenshot](assets/app_screenshot.png)
+![Streamlit App Screenshot 1](assets/Screenshot%202026-01-16%20175759.png)
+---
+<p align="center">
+  <img src="assets/Screenshot%202026-01-16%20180120.png">
+</p>
 
 *Main system interface displaying clinical audit results alongside verifiable evidence.*
 
 ---
+
+## Live Demo
+You can access the live application here:  
+**[Financial Auditor LLM Live App](https://finance-auditor-llm-evhdntwf6p4nsb47ip2y2y.streamlit.app/)**
+
+> **Note:** This system is optimized for **Desktop display**. Mobile support is currently limited; please use a desktop browser for the best experience.
 
 ## Project Overview
 
